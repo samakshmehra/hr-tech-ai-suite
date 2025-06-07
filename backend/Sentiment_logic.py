@@ -1,5 +1,8 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
+from dotenv import load_dotenv
+from pathlib import Path
+import os
 
 # 1. JSON Schema for structured output
 json_schema = {
@@ -31,10 +34,18 @@ json_schema = {
     "required": ["sentiment", "attrition_risk", "issues_detected", "engagement_recommendations"]
 }
 
+# Load environment variables from the backend directory so GOOGLE_API_KEY is available
+dotenv_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path)
+
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+if not GOOGLE_API_KEY:
+    raise EnvironmentError("GOOGLE_API_KEY environment variable is not set")
+
 # 2. Configure Gemini model
 llm = ChatGoogleGenerativeAI(
     model="gemini-1.5-flash",
-    google_api_key="AIzaSyA-LbjWvNKnVcvYeWaHaFP0TE8LWRRjwMU",  # Replace with env var in prod
+    google_api_key=GOOGLE_API_KEY,
     temperature=0.3
 )
 
