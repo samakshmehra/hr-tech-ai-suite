@@ -1,0 +1,18 @@
+Software Engineer Position
+
+Requirements:
+- Strong programming skills in Python, Java, or similar languages
+- Experience with web development frameworks
+- Knowledge of database systems and SQL
+- Understanding of software design patterns
+- Experience with version control systems (Git)
+- Strong problem-solving abilities
+- Bachelor's degree in Computer Science or related field
+
+Responsibilities:
+- Design and develop software solutions
+- Write clean, maintainable, and efficient code
+- Collaborate with cross-functional teams
+- Participate in code reviews
+- Debug and fix issues
+- Document code and technical specifications

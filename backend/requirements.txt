@@ -1,0 +1,12 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+pydantic==2.4.2
+python-dotenv==1.0.0
+langchain>=0.1.16
+langchain-google-genai>=0.0.11
+langchain-community
+google-generativeai
+PyPDF2==3.0.1
+pypdf
+
