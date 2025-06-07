@@ -25,7 +25,7 @@ app = FastAPI(title="HR-Tech AI Suite")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://hr-tech-frontend.vercel.app"],  # your Vercel URL
+    allow_origins=["https://hr-tech-frontend.vercel.app"],  # your actual front-end URL here
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
