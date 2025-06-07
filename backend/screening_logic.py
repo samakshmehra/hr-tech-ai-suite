@@ -1,6 +1,7 @@
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
 import os
 from typing import Dict, Any
 import logging
@@ -39,15 +40,37 @@ def process_resume(resume_path: str, job_description: str) -> Dict[str, Any]:
         resume = docs[0].page_content
         logger.info(f"Successfully loaded PDF. Content length: {len(resume)} characters")
 
-        # 2. Configure Gemini model
-        logger.info("Configuring Gemini model...")
+        # 2. Configure Gemini model and JSON parser
+        logger.info("Configuring Gemini model and JSON parser...")
+        schema = {
+            "type": "object",
+            "properties": {
+                "match_score": {
+                    "type": "number",
+                    "description": "Score from 0 to 1 indicating how well the resume matches the job description"
+                },
+                "highlighted_skills": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of matching skills found in the resume"
+                },
+                "recommendations": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of specific suggestions for improvement"
+                }
+            },
+            "required": ["match_score", "highlighted_skills", "recommendations"]
+        }
+        
+        parser = JsonOutputParser(schema=schema)
         llm = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash",
             google_api_key=os.getenv("GOOGLE_API_KEY"),
             temperature=0.1
         )
 
-        # 3. Create prompt
+        # 3. Create prompt with schema instructions
         prompt = PromptTemplate.from_template("""
         You are an expert HR screening assistant. Analyze the resume against the job description and provide a detailed evaluation.
 
@@ -57,20 +80,7 @@ def process_resume(resume_path: str, job_description: str) -> Dict[str, Any]:
         Resume:
         {resume}
 
-        Provide your evaluation in the following JSON format:
-        {{
-            "match_score": <number between 0 and 1>,
-            "highlighted_skills": [
-                "<skill 1>",
-                "<skill 2>",
-                ...
-            ],
-            "recommendations": [
-                "<recommendation 1>",
-                "<recommendation 2>",
-                ...
-            ]
-        }}
+        {format_instructions}
 
         Guidelines:
         1. match_score should be a number between 0 and 1
@@ -81,51 +91,24 @@ def process_resume(resume_path: str, job_description: str) -> Dict[str, Any]:
 
         # 4. Run the model
         logger.info("Running analysis with Gemini...")
-        response = llm.invoke(prompt.format(resume=resume, job_description=job_description))
+        response = llm.invoke(prompt.format(
+            resume=resume, 
+            job_description=job_description,
+            format_instructions=parser.get_format_instructions()
+        ))
         logger.info(f"Raw model response: {response}")
 
-        # 5. Parse the response
+        # 5. Parse the response using JSON parser
         try:
-            # Extract JSON from the response
-            import json
-            import re
-            
-            # Find JSON in the response
-            json_match = re.search(r'\{.*\}', response.content, re.DOTALL)
-            if not json_match:
-                raise ValueError("No JSON object found in response")
-            
-            json_str = json_match.group()
-            result = json.loads(json_str)
-            
+            result = parser.parse(response.content)
             logger.info(f"Parsed result: {result}")
             
-            # Validate result structure
-            if not isinstance(result, dict):
-                raise ValueError("Invalid result format: expected dictionary")
-            
-            if "match_score" not in result or not isinstance(result["match_score"], (int, float)):
-                raise ValueError("Invalid result format: missing or invalid match_score")
-            
-            if "highlighted_skills" not in result or not isinstance(result["highlighted_skills"], list):
-                raise ValueError("Invalid result format: missing or invalid highlighted_skills")
-            
-            if "recommendations" not in result or not isinstance(result["recommendations"], list):
-                raise ValueError("Invalid result format: missing or invalid recommendations")
-
             # Ensure match_score is between 0 and 1
             result["match_score"] = max(0.0, min(1.0, float(result["match_score"])))
             
-            # Ensure arrays contain strings
-            result["highlighted_skills"] = [str(skill) for skill in result["highlighted_skills"]]
-            result["recommendations"] = [str(rec) for rec in result["recommendations"]]
-
             logger.info(f"Final result: {result}")
             return result
             
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON from response: {e}")
-            raise ValueError(f"Invalid JSON in response: {e}")
         except Exception as e:
             logger.error(f"Error processing model response: {e}")
             raise ValueError(f"Error processing model response: {e}")

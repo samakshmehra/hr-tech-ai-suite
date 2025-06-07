@@ -1,10 +1,10 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
+from schemas import FeedbackResponse
 from dotenv import load_dotenv
 import os
 import logging
-import json
-import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,35 +34,22 @@ def analyze_feedback(employee_feedback: str):
     try:
         logger.info(f"Starting sentiment analysis for feedback length: {len(employee_feedback)}")
         
-        # Configure Gemini model
+        # Configure Gemini model and JSON parser
+        parser = JsonOutputParser(pydantic_object=FeedbackResponse)
         llm = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash",
             google_api_key=GOOGLE_API_KEY,
             temperature=0.3
         )
 
-        # Create prompt
+        # Create prompt with schema instructions
         prompt = PromptTemplate.from_template("""
         You are an HR analyst specializing in employee feedback analysis.
 
         Given the following employee feedback:
         {employee_feedback}
 
-        Analyze the feedback and provide a detailed evaluation in the following JSON format:
-        {{
-            "sentiment": "positive" or "neutral" or "negative",
-            "sentiment_score": <number between 0 and 1>,
-            "key_themes": [
-                "<theme 1>",
-                "<theme 2>",
-                ...
-            ],
-            "recommendations": [
-                "<recommendation 1>",
-                "<recommendation 2>",
-                ...
-            ]
-        }}
+        {format_instructions}
 
         Guidelines:
         1. sentiment should be one of: "positive", "neutral", "negative"
@@ -74,57 +61,24 @@ def analyze_feedback(employee_feedback: str):
 
         # Run the model
         logger.info("Running sentiment analysis with Gemini...")
-        response = llm.invoke(prompt.format(employee_feedback=employee_feedback))
+        response = llm.invoke(prompt.format(
+            employee_feedback=employee_feedback,
+            format_instructions=parser.get_format_instructions()
+        ))
         logger.info(f"Raw model response: {response}")
 
-        # Parse the response
+        # Parse the response using JSON parser
         try:
-            # Find JSON in the response
-            json_match = re.search(r'\{.*\}', response.content, re.DOTALL)
-            if not json_match:
-                raise ValueError("No JSON object found in response")
-            
-            json_str = json_match.group()
-            result = json.loads(json_str)
-            
+            result = parser.parse(response.content)
             logger.info(f"Parsed result: {result}")
             
-            # Validate result structure
-            if not isinstance(result, dict):
-                raise ValueError("Invalid result format: expected dictionary")
+            # Ensure sentiment_score is between 0 and 1
+            if isinstance(result, dict) and "sentiment_score" in result:
+                result["sentiment_score"] = max(0.0, min(1.0, float(result["sentiment_score"])))
             
-            required_fields = ["sentiment", "sentiment_score", "key_themes", "recommendations"]
-            for field in required_fields:
-                if field not in result:
-                    raise ValueError(f"Missing required field: {field}")
-            
-            # Validate and format sentiment
-            valid_sentiments = ["positive", "neutral", "negative"]
-            if result["sentiment"].lower() not in valid_sentiments:
-                raise ValueError(f"Invalid sentiment value: {result['sentiment']}")
-            result["sentiment"] = result["sentiment"].lower()
-            
-            # Validate and format sentiment score
-            if not isinstance(result["sentiment_score"], (int, float)):
-                raise ValueError("Invalid sentiment_score: must be a number")
-            result["sentiment_score"] = max(0.0, min(1.0, float(result["sentiment_score"])))
-            
-            # Validate and format arrays
-            if not isinstance(result["key_themes"], list):
-                raise ValueError("Invalid key_themes: must be an array")
-            if not isinstance(result["recommendations"], list):
-                raise ValueError("Invalid recommendations: must be an array")
-            
-            # Ensure arrays contain strings
-            result["key_themes"] = [str(theme) for theme in result["key_themes"]]
-            result["recommendations"] = [str(rec) for rec in result["recommendations"]]
-
             logger.info(f"Final result: {result}")
             return result
             
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON from response: {e}")
-            raise ValueError(f"Invalid JSON in response: {e}")
         except Exception as e:
             logger.error(f"Error processing model response: {e}")
             raise ValueError(f"Error processing model response: {e}")
