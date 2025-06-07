@@ -2,6 +2,7 @@ from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
+from pathlib import Path
 import os
 from typing import Dict, Any
 
@@ -46,8 +47,9 @@ def process_resume(resume_path: str, job_description: str) -> Dict[str, Any]:
             "required": ["match_score", "highlighted_skills", "recommendations"]
         }
 
-        # Load environment variables so GOOGLE_API_KEY is available
-        load_dotenv()
+        # Load environment variables from the backend directory so GOOGLE_API_KEY is available
+        dotenv_path = Path(__file__).resolve().parent / ".env"
+        load_dotenv(dotenv_path)
         google_api_key = os.getenv("GOOGLE_API_KEY")
         if not google_api_key:
             raise EnvironmentError("GOOGLE_API_KEY environment variable is not set")

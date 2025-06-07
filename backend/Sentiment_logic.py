@@ -1,6 +1,7 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
+from pathlib import Path
 import os
 
 # 1. JSON Schema for structured output
@@ -33,8 +34,9 @@ json_schema = {
     "required": ["sentiment", "attrition_risk", "issues_detected", "engagement_recommendations"]
 }
 
-# Load environment variables so GOOGLE_API_KEY is available when this module is imported
-load_dotenv()
+# Load environment variables from the backend directory so GOOGLE_API_KEY is available
+dotenv_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path)
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
