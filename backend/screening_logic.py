@@ -1,118 +1,80 @@
-from langchain_community.document_loaders import PyPDFLoader, TextLoader
+from langchain_community.document_loaders import PyPDFLoader
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 import os
-from typing import Dict, Any
 import logging
+from typing import Dict, Any
+from schemas import ScreeningResponse
 
-# Configure logging
+# Logging setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def process_resume(resume_path: str, job_description: str) -> Dict[str, Any]:
     """
-    Process a resume against a job description and return evaluation results.
-    
-    Args:
-        resume_path: Path to the uploaded PDF resume
-        job_description: Job description text
-        
-    Returns:
-        Dictionary containing evaluation results with the following structure:
-        {
-            "match_score": float,  # Score from 0 to 1
-            "highlighted_skills": List[str],  # List of matching skills
-            "recommendations": List[str]  # List of recommendations
-        }
+    Analyze a resume against a job description and return a structured evaluation.
     """
+    if not os.path.exists(resume_path):
+        raise FileNotFoundError(f"Resume not found at: {resume_path}")
+    
     try:
-        logger.info(f"Starting resume processing for file: {resume_path}")
-        logger.info(f"Job description length: {len(job_description)} characters")
-
-        # 1. Load resume
-        logger.info("Attempting to load PDF file...")
-        if not os.path.exists(resume_path):
-            raise FileNotFoundError(f"Resume file not found at path: {resume_path}")
-            
+        # Load resume
         loader = PyPDFLoader(resume_path)
-        docs = loader.load()
-        resume = docs[0].page_content
-        logger.info(f"Successfully loaded PDF. Content length: {len(resume)} characters")
+        resume = loader.load()[0].page_content
 
-        # 2. Configure Gemini model and JSON parser
-        logger.info("Configuring Gemini model and JSON parser...")
-        schema = {
-            "type": "object",
-            "properties": {
-                "match_score": {
-                    "type": "number",
-                    "description": "Score from 0 to 1 indicating how well the resume matches the job description"
-                },
-                "highlighted_skills": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of matching skills found in the resume"
-                },
-                "recommendations": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of specific suggestions for improvement"
-                }
-            },
-            "required": ["match_score", "highlighted_skills", "recommendations"]
-        }
-        
-        parser = JsonOutputParser(schema=schema)
+        # Setup model and parser
+        parser = JsonOutputParser(pydantic_object=ScreeningResponse)
         llm = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash",
             google_api_key=os.getenv("GOOGLE_API_KEY"),
             temperature=0.1
         )
+        format_instructions = parser.get_format_instructions()
 
-        # 3. Create prompt with schema instructions
+        # Prompt template
         prompt = PromptTemplate.from_template("""
-        You are an expert HR screening assistant. Analyze the resume against the job description and provide a detailed evaluation.
+        You are an expert HR assistant specializing in resume screening.
 
         Job Description:
+        ---
         {job_description}
+        ---
 
         Resume:
+        ---
         {resume}
+        ---
 
         {format_instructions}
 
-        Guidelines:
-        1. match_score should be a number between 0 and 1
-        2. highlighted_skills should be an array of strings containing skills found in the resume that match the job description
-        3. recommendations should be an array of strings containing specific suggestions for improvement
-        4. Return ONLY the JSON object, no additional text
+        CRITICAL RULES:
+        1. overallMatchScore MUST be a number (not a string)
+        2. Return ONLY the JSON object
+        3. No markdown formatting
+        4. No explanatory text
+        5. Proper JSON syntax
         """)
 
-        # 4. Run the model
-        logger.info("Running analysis with Gemini...")
+        # Get model response
         response = llm.invoke(prompt.format(
-            resume=resume, 
+            resume=resume,
             job_description=job_description,
-            format_instructions=parser.get_format_instructions()
+            format_instructions=format_instructions
         ))
-        logger.info(f"Raw model response: {response}")
 
-        # 5. Parse the response using JSON parser
-        try:
-            result = parser.parse(response.content)
-            logger.info(f"Parsed result: {result}")
-            
-            # Ensure match_score is between 0 and 1
-            result["match_score"] = max(0.0, min(1.0, float(result["match_score"])))
-            
-            logger.info(f"Final result: {result}")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error processing model response: {e}")
-            raise ValueError(f"Error processing model response: {e}")
+        content = response.content.strip().removeprefix("```json").removesuffix("```").strip()
+
+        # Parse structured result
+        result = parser.parse(content)
+        result_dict = result if isinstance(result, dict) else result.dict()
+
+        # Clamp score between 0-100
+        score = float(result_dict.get("overallMatchScore", 0))
+        result_dict["overallMatchScore"] = max(0.0, min(100.0, score))
+
+        return result_dict
 
     except Exception as e:
-        logger.error(f"Error in process_resume: {str(e)}", exc_info=True)
-        raise Exception(f"Error processing resume: {str(e)}")
+        logger.error("Failed to process resume", exc_info=True)
+        raise Exception(f"Resume processing failed: {str(e)}")

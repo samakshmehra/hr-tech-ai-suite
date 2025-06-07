@@ -8,9 +8,12 @@ const api = axios.create({
 });
 
 export interface ScreeningResponse {
-  match_score: number;
-  highlighted_skills: string[];
-  recommendations: string[];
+  overallMatchScore: number;
+  matchingSkills: string[];
+  missingSkills: string[];
+  experienceMatch: string;
+  qualificationMatch: string;
+  summary: string;
 }
 
 export interface SentimentResponse {
