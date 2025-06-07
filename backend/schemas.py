@@ -17,12 +17,13 @@ class EvaluationResult(BaseModel):
     recommendations: List[str]
 
 class FeedbackRequest(BaseModel):
-    text: str
+    employee_feedback: str
 
 class FeedbackResponse(BaseModel):
     sentiment_score: float
     key_themes: List[str]
     sentiment: Literal["positive", "neutral", "negative"]
+    recommendations: List[str]
 
 class ScreeningResponse(BaseModel):
     match_score: float

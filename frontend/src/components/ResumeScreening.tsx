@@ -34,9 +34,14 @@ const ResumeScreening: React.FC = () => {
     setError(null);
     try {
       const response = await screeningApi.screenResume(selectedFile, jobDescription);
+      if (!response || typeof response.match_score !== 'number' || !Array.isArray(response.highlighted_skills) || !Array.isArray(response.recommendations)) {
+        throw new Error('Invalid response format from server');
+      }
       setResult(response);
-    } catch (err) {
-      setError('Failed to process resume. Please try again.');
+    } catch (err: any) {
+      console.error('Error details:', err);
+      const errorMessage = err.response?.data?.detail || err.message || 'Failed to process resume. Please try again.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -127,7 +132,7 @@ const ResumeScreening: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Highlighted Skills</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {result.highlighted_skills.map((skill, index) => (
+                  {result.highlighted_skills?.map((skill, index) => (
                     <span
                       key={index}
                       className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200"
@@ -140,7 +145,7 @@ const ResumeScreening: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Recommendations</p>
                 <ul className="mt-2 list-disc list-inside text-sm text-gray-600 dark:text-gray-300">
-                  {result.recommendations.map((rec, index) => (
+                  {result.recommendations?.map((rec, index) => (
                     <li key={index}>{rec}</li>
                   ))}
                 </ul>

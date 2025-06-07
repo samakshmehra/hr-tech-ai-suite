@@ -15,8 +15,19 @@ const SentimentAnalysis: React.FC = () => {
     try {
       const response = await sentimentApi.analyzeFeedback(feedback);
       setResult(response);
-    } catch (err) {
-      setError('Failed to analyze feedback. Please try again.');
+    } catch (err: any) {
+      console.error('Error details:', err);
+      let errorMessage = 'Failed to analyze feedback. Please try again.';
+      
+      if (err.response?.data?.detail) {
+        errorMessage = typeof err.response.data.detail === 'string' 
+          ? err.response.data.detail 
+          : JSON.stringify(err.response.data.detail);
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -92,6 +103,14 @@ const SentimentAnalysis: React.FC = () => {
                   </span>
                 ))}
               </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Recommendations</p>
+              <ul className="mt-2 list-disc list-inside text-sm text-gray-600 dark:text-gray-300">
+                {result.recommendations?.map((rec, index) => (
+                  <li key={index}>{rec}</li>
+                ))}
+              </ul>
             </div>
           </div>
         </div>

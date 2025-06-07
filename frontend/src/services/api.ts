@@ -17,6 +17,7 @@ export interface SentimentResponse {
   sentiment_score: number;
   key_themes: string[];
   sentiment: 'positive' | 'neutral' | 'negative';
+  recommendations: string[];
 }
 
 export const screeningApi = {
@@ -36,7 +37,7 @@ export const screeningApi = {
 
 export const sentimentApi = {
   analyzeFeedback: async (text: string): Promise<SentimentResponse> => {
-    const response = await api.post<SentimentResponse>('/sentiment', { text });
+    const response = await api.post<SentimentResponse>('/sentiment', { employee_feedback: text });
     return response.data;
   },
 };
